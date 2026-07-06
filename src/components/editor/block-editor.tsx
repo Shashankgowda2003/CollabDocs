@@ -8,6 +8,13 @@ import { BlockHandle, BlockAddButton } from "./block-handle";
 import { SlashMenu } from "./slash-menu";
 import { LinkAutocomplete } from "./link-autocomplete";
 import { DatabaseBlock } from "./blocks/database-block";
+import { DiagramBlock } from "./blocks/diagram-block";
+import { TocBlock } from "./blocks/toc-block";
+import { ProgressBarBlock } from "./blocks/progress-bar-block";
+import { BreadcrumbBlock } from "./blocks/breadcrumb-block";
+import { ButtonBlock } from "./blocks/button-block";
+import { WhiteboardBlock } from "./blocks/whiteboard-block";
+import { FormBlock } from "./blocks/form-block";
 import { AutoSaveIndicator } from "./auto-save-indicator";
 import { WordCount } from "./word-count";
 import { FileDropZone } from "./file-drop-zone";
@@ -411,6 +418,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
                     <BlockAddButton onClick={() => addBlock("paragraph", block.id)} />
                   <div className="relative">
                     <BlockContent block={block} isActive={activeBlock === block.id}
+                      allBlocks={blocks}
                       onChange={(c) => handleContentChange(block.id, c)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey && !["code", "table", "checklist", "database"].includes(block.type)) { e.preventDefault(); addBlock("paragraph", block.id); }
@@ -457,8 +465,8 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   );
 }
 
-function BlockContent({ block, isActive, onChange, onKeyDown }: {
-  block: Block; isActive: boolean; onChange: (c: string) => void; onKeyDown: (e: React.KeyboardEvent) => void;
+function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
+  block: Block; isActive: boolean; onChange: (c: string) => void; onKeyDown: (e: React.KeyboardEvent) => void; allBlocks?: Block[];
 }) {
   const cn = "w-full rounded-xl px-3 py-2 text-zinc-800 dark:text-zinc-200 outline-none transition-all focus:bg-zinc-50 dark:focus:bg-zinc-900/50 placeholder:text-zinc-400 dark:placeholder:text-zinc-600";
 
@@ -717,6 +725,43 @@ function BlockContent({ block, isActive, onChange, onKeyDown }: {
     }
     case "database":
       return <DatabaseBlock content={block.content} onChange={onChange} />;
+    case "diagram":
+      return <DiagramBlock content={block.content} onChange={onChange} onKeyDown={onKeyDown} />;
+    case "toc":
+      return <TocBlock blocks={allBlocks ?? []} onScrollToBlock={(id) => {
+        document.getElementById(`block-${id}`)?.scrollIntoView({ behavior: "smooth" });
+      }} />;
+    case "progress":
+      return <ProgressBarBlock content={block.content} onChange={onChange} />;
+    case "breadcrumb":
+      return <BreadcrumbBlock content={block.content} onChange={onChange} />;
+    case "button":
+      return <ButtonBlock content={block.content} blockId={block.id} />;
+    case "whiteboard":
+      return <WhiteboardBlock content={block.content} onChange={onChange} />;
+    case "form":
+      return <FormBlock content={block.content} onChange={onChange} />;
+    case "synced": {
+      let refId = block.content;
+      try { const p = JSON.parse(block.content); refId = p.refId || block.content; } catch {}
+      const refBlock = (allBlocks ?? []).find((b) => b.id === refId);
+      if (refBlock) {
+        return <BlockContent block={refBlock} isActive={false} onChange={() => {}} onKeyDown={() => {}} allBlocks={allBlocks} />;
+      }
+      return (
+        <div className="rounded-xl border border-dashed border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5 p-4 text-center">
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Synced block — paste a block ID to mirror it here
+          </p>
+          <input
+            className="mt-2 w-full max-w-xs rounded-lg border border-amber-200 dark:border-amber-500/20 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 outline-none font-mono"
+            value={refId}
+            onChange={(e) => onChange(JSON.stringify({ refId: e.target.value }))}
+            placeholder="Block ID"
+          />
+        </div>
+      );
+    }
     default:
       return <input className={`${cn} text-sm leading-relaxed`} value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Type '/' for commands..." />;
   }

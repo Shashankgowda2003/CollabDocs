@@ -12,6 +12,8 @@ const VIEW_ICONS: Record<ViewType, string> = {
   table: "\u25A6",
   board: "\u25A3",
   calendar: "\u25A2",
+  gallery: "\u25A7",
+  timeline: "\u2261",
 };
 
 export function DatabaseViewSwitcher({ views, activeViewId, onChange }: Props) {
