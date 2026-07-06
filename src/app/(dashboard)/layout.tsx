@@ -5,6 +5,7 @@ import { MobileSidebar } from "@/components/sidebar/mobile-sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { CommandPalette } from "@/components/command-palette";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+import { DocumentTour } from "@/components/document-tour";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -19,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </main>
       <CommandPalette />
       <KeyboardShortcutsDialog />
+      <DocumentTour />
     </div>
   );
 }

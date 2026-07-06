@@ -30,6 +30,7 @@ import { createSuggestion } from "@/server/actions/suggestions";
 import { replayPendingOperation } from "@/server/actions/replay";
 import { saveBlocks } from "@/server/actions/blocks";
 import { queueOperation } from "@/lib/offline/sync-engine-v2";
+import { getDocumentContentText, estimateReadingTimeShort } from "@/lib/utils";
 import katex from "katex";
 
 interface Block { id: string; type: string; content: string; parentId: string | null; position: number; }
@@ -380,6 +381,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
               )}
             </div>
             <WordCount blocks={blocks} />
+            <ReadingTime blocks={blocks} />
           </div>
           <div className="flex items-center gap-3">
             {uploading && <span className="text-[10px] text-zinc-500 animate-pulse">Uploading...</span>}
@@ -765,4 +767,14 @@ function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
     default:
       return <input className={`${cn} text-sm leading-relaxed`} value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Type '/' for commands..." />;
   }
+}
+
+function ReadingTime({ blocks }: { blocks: { content: string }[] }) {
+  const text = getDocumentContentText(blocks);
+  if (!text.trim()) return null;
+  return (
+    <span className="text-xs text-zinc-400 dark:text-zinc-600">
+      {estimateReadingTimeShort(text)}
+    </span>
+  );
 }

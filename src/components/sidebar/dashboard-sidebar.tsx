@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { SearchBar } from "@/components/search/search-bar";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { FavoritesList } from "@/components/sidebar/favorites-list";
 import { useTheme } from "@/lib/theme-context";
 
 export function DashboardSidebar() {
@@ -51,6 +52,8 @@ export function DashboardSidebar() {
           </Link>
         )}
       </nav>
+
+      <FavoritesList workspaceId={pathname.split("/")[1] || ""} />
 
       <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
         <NotificationBell />

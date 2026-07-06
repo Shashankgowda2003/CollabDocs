@@ -7,6 +7,7 @@ import Link from "next/link";
 import { WorkspaceItems } from "./workspace-items";
 import { WorkspaceActions } from "./workspace-actions";
 import { ActivityFeed } from "@/components/activity-feed";
+import { QuickNotes } from "@/components/quick-notes";
 
 interface Props { params: Promise<{ workspaceId: string }>; }
 
@@ -57,6 +58,9 @@ export default async function WorkspacePage({ params }: Props) {
         )}
 
         <WorkspaceItems workspaceId={workspaceId} folders={workspace.folders} documents={workspace.documents} canEdit={canEdit} />
+        <div className="mt-8">
+          <QuickNotes workspaceId={workspaceId} />
+        </div>
         <ActivityFeed workspaceId={workspaceId} />
       </div>
     </div>

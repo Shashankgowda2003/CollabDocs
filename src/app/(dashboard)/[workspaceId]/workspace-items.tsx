@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createDocument } from "@/server/actions/document";
@@ -9,6 +9,7 @@ import { renameDocument } from "@/server/actions/document";
 import { duplicateDocument, duplicateFolder } from "@/server/actions/duplicate";
 import { moveToTrash } from "@/server/actions/trash";
 import { motion, AnimatePresence } from "framer-motion";
+import { estimateReadingTimeShort } from "@/lib/utils";
 
 interface Folder { id: string; name: string; }
 interface Doc { id: string; title: string; updatedAt: Date; }
@@ -109,7 +110,9 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
                   ) : (
                     <>
                       <Link href={`/${workspaceId}/d/${doc.id}`} className="flex-1 flex items-center gap-3 p-4 min-w-0">
-                        <svg className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 dark:from-blue-500/10 dark:to-purple-500/10 flex items-center justify-center text-sm shrink-0">
+                          <DocumentIcon docId={doc.id} />
+                        </div>
                         <div className="min-w-0">                        <p className="font-medium text-zinc-900 dark:text-white text-sm truncate">{doc.title}</p><p className="text-xs text-zinc-500 mt-0.5">{new Date(doc.updatedAt).toLocaleDateString()}</p></div>
                       </Link>
                       {canEdit && (
@@ -127,6 +130,51 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function DocumentIcon({ docId }: { docId: string }) {
+  const [emoji, setEmoji] = useState("📄");
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`doc-icon-${docId}`);
+    if (saved) setEmoji(saved);
+  }, [docId]);
+
+  function setIcon(e: React.MouseEvent, icon: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setEmoji(icon);
+    localStorage.setItem(`doc-icon-${docId}`, icon);
+    setEditing(false);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(!editing); }}
+        className="text-sm hover:scale-110 transition-transform"
+      >
+        {emoji}
+      </button>
+      {editing && (
+        <div
+          className="absolute left-0 top-full mt-1 w-40 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl z-50 p-2 grid grid-cols-6 gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {["📄", "📝", "📋", "💡", "🎯", "🔥", "⭐", "🚀", "💬", "📊", "📅", "✅"].map((icon) => (
+            <button
+              key={icon}
+              onClick={(e) => setIcon(e, icon)}
+              className="h-7 w-7 rounded flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs"
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
