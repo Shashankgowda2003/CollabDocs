@@ -1,0 +1,382 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id                  String                   @id @default(cuid())
+  name                String?
+  email               String                   @unique
+  emailVerified       DateTime?
+  image               String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  accounts            Account[]
+  activities          ActivityEntry[]
+  aiUsage             AiUsage[]
+  apiKeys             ApiKey[]
+  commentReplies      CommentReply[]
+  commentThreads      CommentThread[]
+  documents           Document[]
+  notifications       Notification[]
+  notificationPrefs   NotificationPreference[]
+  operations          Operation[]
+  passwordResetTokens PasswordResetToken[]
+  permissions         Permission[]
+  sessions            Session[]
+  shareLinks          ShareLink[]
+  suggestions         Suggestion[]
+  templates           Template[]
+  workspaceMembers    WorkspaceMember[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Workspace {
+  id            String            @id @default(cuid())
+  name          String
+  slug          String            @unique
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  activities    ActivityEntry[]
+  documents     Document[]
+  folders       Folder[]
+  notifications Notification[]
+  tags          Tag[]
+  templates     Template[]
+  members       WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String    @default("Editor")
+  joinedAt    DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Folder {
+  id             String     @id @default(cuid())
+  name           String
+  workspaceId    String
+  parentFolderId String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+  documents      Document[]
+  parentFolder   Folder?    @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
+  childFolders   Folder[]   @relation("FolderHierarchy")
+  workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id                 String              @id @default(cuid())
+  title              String              @default("Untitled")
+  workspaceId        String
+  folderId           String?
+  authorId           String
+  isPublished        Boolean             @default(false)
+  publishedSlug      String?
+  deletedAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  blocks             Block[]
+  commentThreads     CommentThread[]
+  author             User                @relation(fields: [authorId], references: [id])
+  folder             Folder?             @relation(fields: [folderId], references: [id])
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  incomingLinks      DocumentLink[]      @relation("TargetDocument")
+  outgoingLinks      DocumentLink[]      @relation("SourceDocument")
+  documentTags       DocumentTag[]
+  notifications      Notification[]
+  operations         Operation[]
+  pendingInvitations PendingInvitation[]
+  shareLinks         ShareLink[]
+  snapshots          Snapshot[]
+  suggestions        Suggestion[]
+}
+
+model DocumentLink {
+  id               String   @id @default(cuid())
+  sourceDocumentId String
+  targetDocumentId String
+  createdAt        DateTime @default(now())
+  targetDocument   Document @relation("TargetDocument", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+  sourceDocument   Document @relation("SourceDocument", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceDocumentId, targetDocumentId])
+}
+
+model Block {
+  id             String          @id @default(cuid())
+  documentId     String
+  parentBlockId  String?
+  type           String
+  content        String          @default("")
+  position       Int             @default(0)
+  collapsed      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  parentBlock    Block?          @relation("BlockNesting", fields: [parentBlockId], references: [id])
+  childBlocks    Block[]         @relation("BlockNesting")
+  document       Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  commentThreads CommentThread[]
+  operations     Operation[]
+}
+
+model Tag {
+  id           String        @id @default(cuid())
+  name         String
+  workspaceId  String
+  createdAt    DateTime      @default(now())
+  documentTags DocumentTag[]
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+}
+
+model DocumentTag {
+  documentId String
+  tagId      String
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+}
+
+model CommentThread {
+  id              String         @id @default(cuid())
+  documentId      String
+  blockId         String?
+  textRangeAnchor String?
+  authorId        String
+  status          String         @default("Open")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  replies         CommentReply[]
+  author          User           @relation(fields: [authorId], references: [id])
+  block           Block?         @relation(fields: [blockId], references: [id])
+  document        Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model CommentReply {
+  id        String        @id @default(cuid())
+  threadId  String
+  authorId  String
+  content   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  author    User          @relation(fields: [authorId], references: [id])
+  thread    CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+model Operation {
+  id         String   @id @default(cuid())
+  documentId String
+  blockId    String?
+  userId     String
+  type       String
+  payload    String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  block      Block?   @relation(fields: [blockId], references: [id])
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Snapshot {
+  id             String   @id @default(cuid())
+  documentId     String
+  data           String
+  operationCount Int
+  createdAt      DateTime @default(now())
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model ShareLink {
+  id                  String    @id @default(cuid())
+  documentId          String
+  role                String
+  password            String?
+  expiresAt           DateTime?
+  workspaceMemberOnly Boolean   @default(false)
+  isRevoked           Boolean   @default(false)
+  createdBy           String
+  createdAt           DateTime  @default(now())
+  creator             User      @relation(fields: [createdBy], references: [id])
+  document            Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model PendingInvitation {
+  id          String   @id @default(cuid())
+  email       String
+  documentId  String
+  workspaceId String
+  role        String
+  token       String   @unique
+  invitedBy   String
+  used        Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Permission {
+  id           String   @id @default(cuid())
+  userId       String
+  resourceType String
+  resourceId   String
+  role         String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceType, resourceId])
+}
+
+model Notification {
+  id          String     @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String
+  read        Boolean    @default(false)
+  workspaceId String?
+  documentId  String?
+  createdAt   DateTime   @default(now())
+  document    Document?  @relation(fields: [documentId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id          String  @id @default(cuid())
+  userId      String
+  workspaceId String?
+  folderId    String?
+  documentId  String?
+  threadId    String?
+  muted       Boolean @default(false)
+  types       String  @default("[]")
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String
+  key       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AiUsage {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String?
+  provider    String
+  model       String
+  tokens      Int
+  feature     String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  resource   String
+  resourceId String
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
+}
+
+model Template {
+  id          String    @id @default(cuid())
+  title       String
+  description String    @default("")
+  workspaceId String
+  authorId    String
+  blocksJson  String    @default("[]")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  author      User      @relation(fields: [authorId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Suggestion {
+  id         String   @id @default(cuid())
+  documentId String
+  blockId    String?
+  userId     String
+  type       String
+  oldContent String   @default("")
+  newContent String   @default("")
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model ActivityEntry {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String
+  resource    String
+  resourceId  String
+  title       String    @default("")
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
