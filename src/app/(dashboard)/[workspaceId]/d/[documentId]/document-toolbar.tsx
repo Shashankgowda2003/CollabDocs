@@ -12,6 +12,7 @@ import { AiPanel } from "@/components/ai/ai-panel";
 import { ApiKeySettings } from "@/components/ai/api-key-settings";
 import { SuggestionPanel } from "@/components/suggestions/suggestion-panel";
 import { DocumentGraph } from "@/components/graph/document-graph";
+import { ReactFlowProvider } from "@xyflow/react";
 import { exportDocument } from "@/server/actions/export";
 import { togglePublish } from "@/server/actions/publish";
 import { toggleFavorite } from "@/server/actions/favorites";
@@ -139,7 +140,9 @@ export function DocumentToolbar({ documentId, workspaceId, role, threadCount, li
               </button>
             </div>
             <div className="h-[calc(80vh-60px)]">
-              <DocumentGraph workspaceId={workspaceId} currentDocumentId={documentId} />
+              <ReactFlowProvider>
+                <DocumentGraph workspaceId={workspaceId} currentDocumentId={documentId} />
+              </ReactFlowProvider>
             </div>
           </div>
         </div>
