@@ -10,6 +10,9 @@ export type AwarenessUser = {
   cursor?: { x: number; y: number };
   selection?: { from: number; to: number };
   currentBlock?: string;
+  callStatus?: "idle" | "in-call";
+  signal?: { type: string; target: number; sdp?: string; candidate?: string };
+  mediaState?: { audio: boolean; video: boolean; screen: boolean };
 };
 
 const COLORS = [
@@ -33,6 +36,26 @@ export function getYDoc(documentId: string): Y.Doc | undefined {
 
 export function unregisterYDoc(documentId: string) {
   ydocRegistry.delete(documentId);
+  awarenessRegistry.delete(documentId);
+}
+
+const awarenessRegistry = new Map<string, typeof WebsocketProvider.prototype.awareness>();
+
+export function registerAwareness(
+  documentId: string,
+  awareness: typeof WebsocketProvider.prototype.awareness
+) {
+  awarenessRegistry.set(documentId, awareness);
+}
+
+export function getAwareness(
+  documentId: string
+): typeof WebsocketProvider.prototype.awareness | undefined {
+  return awarenessRegistry.get(documentId);
+}
+
+export function unregisterAwareness(documentId: string) {
+  awarenessRegistry.delete(documentId);
 }
 
 export interface CollaborationState {
@@ -60,6 +83,8 @@ export function createCollaboration(
   };
 
   provider.awareness.setLocalState(user);
+
+  registerAwareness(documentId, provider.awareness);
 
   const yContent = ydoc.getText("content");
   if (yContent.length === 0 && initialContent) {

@@ -13,6 +13,10 @@ import { WordCount } from "./word-count";
 import { FileDropZone } from "./file-drop-zone";
 import { CollaborationCursors } from "@/components/collaboration/cursors";
 import { ConnectedAvatars } from "@/components/collaboration/avatars";
+import { CallButton } from "@/components/collaboration/call-button";
+import { CallPanel } from "@/components/collaboration/call-panel";
+import { CallManager } from "@/lib/webrtc/call-manager";
+import { getAwareness } from "@/lib/collaboration";
 import { motion, AnimatePresence } from "framer-motion";
 import { maybeCreateSnapshot } from "@/server/actions/snapshots";
 import { createSuggestion } from "@/server/actions/suggestions";
@@ -35,6 +39,10 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   const [connectedUsers, setConnectedUsers] = useState<Map<number, AwarenessUser>>(new Map());
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [callStatus, setCallStatus] = useState<"idle" | "in-call">("idle");
+  const [hasActiveCallers, setHasActiveCallers] = useState(false);
+  const callManagerRef = useRef<CallManager | null>(null);
+  const userColorRef = useRef<string>("#8b5cf6");
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<WebsocketProvider | null>(null);
   const awarenessRef = useRef<WebsocketProvider["awareness"] | null>(null);
@@ -84,10 +92,11 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   }, []);
 
   useEffect(() => {
-    const { ydoc, provider, awareness } = createCollaboration(documentId, userName);
+    const { ydoc, provider, awareness, user } = createCollaboration(documentId, userName);
     ydocRef.current = ydoc;
     providerRef.current = provider;
     awarenessRef.current = awareness;
+    userColorRef.current = user.color;
 
     registerYDoc(documentId, ydoc);
 
@@ -128,6 +137,46 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
       provider.disconnect();
       ydoc.destroy();
     };
+  }, [documentId, userName]);
+
+  // Initialize CallManager when awareness is ready
+  useEffect(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+
+    const cm = new CallManager(documentId, userName, userColorRef.current, awareness);
+    callManagerRef.current = cm;
+
+    const unsub = cm.subscribe(() => {
+      setCallStatus(cm.getState().status);
+    });
+
+    return () => {
+      unsub();
+      cm.destroy();
+      callManagerRef.current = null;
+    };
+  }, [documentId, userName]);
+
+  // Track if other users are in a call
+  useEffect(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+
+    const checkCallers = () => {
+      let found = false;
+      awareness.getStates().forEach((state, clientId) => {
+        if (clientId !== awareness.clientID) {
+          const user = state as AwarenessUser;
+          if (user?.callStatus === "in-call") found = true;
+        }
+      });
+      setHasActiveCallers(found);
+    };
+
+    checkCallers();
+    awareness.on("change", checkCallers);
+    return () => awareness.off("change", checkCallers);
   }, [documentId, userName]);
 
   // Immediate state update + sync to Yjs
@@ -328,6 +377,14 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
           <div className="flex items-center gap-3">
             {uploading && <span className="text-[10px] text-zinc-500 animate-pulse">Uploading...</span>}
             <AutoSaveIndicator lastSaved={lastSaved} />
+            <CallButton
+              callActive={callStatus === "in-call"}
+              hasActiveCallers={hasActiveCallers}
+              onStartCall={() => callManagerRef.current?.startCall()}
+              onStartAudioOnly={() => callManagerRef.current?.startAudioOnly()}
+              onJoinCall={() => callManagerRef.current?.joinCall()}
+              onLeaveCall={() => callManagerRef.current?.leaveCall()}
+            />
             <button onClick={handleToolbarUpload} className="rounded-xl p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all" title="Upload file">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
             </button>
@@ -388,6 +445,14 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
             className="mt-3 w-full rounded-xl py-2.5 text-center text-sm text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all">+ Add a block</motion.button>
         </div>
       </div>
+    {callManagerRef.current && (
+      <CallPanel
+        callManager={callManagerRef.current}
+        localUserName={userName}
+        localUserColor={userColorRef.current}
+        onClose={() => callManagerRef.current?.leaveCall()}
+      />
+    )}
     </FileDropZone>
   );
 }
