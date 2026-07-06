@@ -100,6 +100,47 @@ export function DatabaseTableView({ data, onChange }: Props) {
       );
     }
 
+    if (col.type === "math") {
+      const expr = String(value || "");
+      try {
+        const func = new Function(
+          ...schema.map((c) => c.id),
+          `"use strict"; return (${expr || 0});`
+        );
+        const args = schema.map((c) =>
+          c.id === col.id ? 0 : Number(getCellValue(row, c.id, 0)) || 0
+        );
+        const result = func(...args);
+        return (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={expr}
+              onChange={(e) => updateCell(row.id, col.id, e.target.value)}
+              className="w-20 bg-transparent text-xs outline-none font-mono text-blue-600 dark:text-blue-400"
+              placeholder="=A+B"
+            />
+            <span className="text-[10px] text-zinc-400 tabular-nums font-mono">
+              = {typeof result === "number" ? result.toFixed(2) : String(result)}
+            </span>
+          </div>
+        );
+      } catch {
+        return (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={expr}
+              onChange={(e) => updateCell(row.id, col.id, e.target.value)}
+              className="w-20 bg-transparent text-xs outline-none font-mono"
+              placeholder="=A+B"
+            />
+            <span className="text-[10px] text-red-400">Error</span>
+          </div>
+        );
+      }
+    }
+
     return (
       <input
         type="text"

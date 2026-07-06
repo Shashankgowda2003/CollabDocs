@@ -5,7 +5,8 @@ export type ColumnType =
   | "multi_select"
   | "date"
   | "checkbox"
-  | "person";
+  | "person"
+  | "math";
 
 export interface Column {
   id: string;
@@ -19,7 +20,7 @@ export interface Row {
   cells: Record<string, unknown>;
 }
 
-export type ViewType = "table" | "board" | "calendar";
+export type ViewType = "table" | "board" | "calendar" | "gallery" | "timeline";
 
 export interface ViewConfig {
   id: string;
@@ -43,6 +44,7 @@ export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   date: "Date",
   checkbox: "Checkbox",
   person: "Person",
+  math: "Math",
 };
 
 export function createEmptyDatabase(): DatabaseData {
@@ -72,6 +74,7 @@ export function createRow(schema: Column[]): Row {
   const cells: Record<string, unknown> = {};
   for (const col of schema) {
     if (col.type === "checkbox") cells[col.id] = false;
+    else if (col.type === "math") cells[col.id] = "";
     else if (col.type === "select" && col.options && col.options.length > 0) cells[col.id] = col.options[0];
     else cells[col.id] = "";
   }

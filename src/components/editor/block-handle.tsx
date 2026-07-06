@@ -26,7 +26,15 @@ export function BlockHandle({ block, onChangeType, onDelete, onAddAfter, onDupli
     { type: "table", label: "Table", icon: "\u2630" },
     { type: "checklist", label: "Checklist", icon: "\u2611" },
     { type: "equation", label: "Equation", icon: "\u0192" },
+    { type: "diagram", label: "Diagram", icon: "\u2B21" },
     { type: "database", label: "Database", icon: "\u25A6" },
+    { type: "progress", label: "Progress", icon: "\u25D0" },
+    { type: "button", label: "Button", icon: "\u25B6" },
+    { type: "toc", label: "TOC", icon: "\u2261" },
+    { type: "form", label: "Form", icon: "\u25A1" },
+    { type: "whiteboard", label: "Whiteboard", icon: "\u270E" },
+    { type: "breadcrumb", label: "Breadcrumb", icon: "\u203A" },
+    { type: "synced", label: "Synced", icon: "\u21C4" },
   ];
 
   return (

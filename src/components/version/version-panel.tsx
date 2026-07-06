@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { getVersionHistory, restoreSnapshot } from "@/server/actions/version";
+import { VersionDiffPanel } from "./version-diff-panel";
 
 interface Op { id: string; type: string; payload: string; createdAt: Date; user: { id: string; name: string | null; image: string | null }; }
 interface Snap { id: string; operationCount: number; createdAt: Date; }
@@ -13,6 +14,7 @@ const opLabels: Record<string, string> = { insert_text: "Text added", delete_tex
 export function VersionPanel({ documentId, onClose }: Props) {
   const [ops, setOps] = useState<Op[]>([]); const [snapshots, setSnapshots] = useState<Snap[]>([]); const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [showDiff, setShowDiff] = useState(false);
 
   useEffect(() => { getVersionHistory(documentId).then((d) => { setOps(d.operations); setSnapshots(d.snapshots); setLoading(false); }); }, [documentId]);
   const handleRestore = useCallback(async (id: string) => { setRestoring(id); await restoreSnapshot(id, documentId); setRestoring(null); onClose(); }, [documentId, onClose]);
@@ -21,7 +23,12 @@ export function VersionPanel({ documentId, onClose }: Props) {
     <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-y-0 right-0 z-50 w-80 border-l border-zinc-800 bg-zinc-950 shadow-2xl flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-zinc-800">
         <h2 className="text-sm font-semibold text-white">Version History</h2>
-        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowDiff(true)} className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:bg-zinc-800">
+            Diff
+          </button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? <div className="p-8 text-center"><div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-300" /></div> : (
@@ -43,6 +50,7 @@ export function VersionPanel({ documentId, onClose }: Props) {
           </div>
         )}
       </div>
+      {showDiff && <VersionDiffPanel documentId={documentId} onClose={() => setShowDiff(false)} />}
     </motion.div>
   );
 }

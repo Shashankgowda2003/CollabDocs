@@ -6,6 +6,8 @@ import { DatabaseSchemaEditor } from "./database-schema-editor";
 import { DatabaseTableView } from "./database-table-view";
 import { DatabaseKanbanView } from "./database-kanban-view";
 import { DatabaseCalendarView } from "./database-calendar-view";
+import { DatabaseGalleryView } from "./database-gallery-view";
+import { DatabaseTimelineView } from "./database-timeline-view";
 import type { DatabaseData, ViewConfig } from "./database-types";
 import { createEmptyDatabase } from "./database-types";
 
@@ -69,6 +71,12 @@ export function DatabaseBlock({ content, onChange }: Props) {
           dateColumnId={activeView.dateColumnId}
           onChange={handleDataChange}
         />
+      )}
+      {activeView?.type === "gallery" && (
+        <DatabaseGalleryView data={data} onChange={handleDataChange} />
+      )}
+      {activeView?.type === "timeline" && (
+        <DatabaseTimelineView data={data} onChange={handleDataChange} />
       )}
 
       {showSchemaEditor && (
