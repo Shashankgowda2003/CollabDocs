@@ -32,6 +32,7 @@ model User {
   suggestions         Suggestion[]
   templates           Template[]
   workspaceMembers    WorkspaceMember[]
+  favorites           Favorite[]
 }
 
 model Account {
@@ -144,6 +145,18 @@ model Document {
   shareLinks         ShareLink[]
   snapshots          Snapshot[]
   suggestions        Suggestion[]
+  favoritedBy        Favorite[]
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
 }
 
 model DocumentLink {

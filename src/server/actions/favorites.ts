@@ -11,16 +11,29 @@ export async function toggleFavorite(documentId: string) {
   const doc = await db.document.findUnique({ where: { id: documentId } });
   if (!doc) throw new Error("Document not found");
 
-  const existing = await db.document.findFirst({
+  const existing = await db.favorite.findUnique({
     where: {
-      id: documentId,
-      authorId: session.user.id,
+      userId_documentId: {
+        userId: session.user.id,
+        documentId,
+      },
     },
   });
 
-  if (!existing) {
+  if (existing) {
+    await db.favorite.delete({
+      where: { id: existing.id },
+    });
+    revalidatePath(`/${doc.workspaceId}/d/${documentId}`);
     return { favorited: false };
   }
+
+  await db.favorite.create({
+    data: {
+      userId: session.user.id,
+      documentId,
+    },
+  });
 
   revalidatePath(`/${doc.workspaceId}/d/${documentId}`);
   return { favorited: true };
@@ -30,18 +43,34 @@ export async function getFavorites() {
   const session = await auth();
   if (!session?.user) return [];
 
-  const memberships = await db.workspaceMember.findMany({
+  const favorites = await db.favorite.findMany({
     where: { userId: session.user.id },
-    select: { workspaceId: true },
-  });
-  const workspaceIds = memberships.map((m) => m.workspaceId);
-
-  const docs = await db.document.findMany({
-    where: { workspaceId: { in: workspaceIds } },
-    orderBy: { updatedAt: "desc" },
+    include: {
+      document: {
+        include: {
+          workspace: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
     take: 20,
-    include: { workspace: { select: { id: true, name: true } } },
   });
 
-  return docs;
+  return favorites.map((f) => f.document);
+}
+
+export async function checkIsFavorite(documentId: string) {
+  const session = await auth();
+  if (!session?.user) return false;
+
+  const existing = await db.favorite.findUnique({
+    where: {
+      userId_documentId: {
+        userId: session.user.id,
+        documentId,
+      },
+    },
+  });
+
+  return existing !== null;
 }

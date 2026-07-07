@@ -85,8 +85,8 @@ export async function getUserWorkspaces(userId: string) {
     include: {
       workspace: {
         include: {
-          folders: { where: { parentFolderId: null }, orderBy: { name: "asc" } },
-          documents: { where: { folderId: null }, orderBy: { updatedAt: "desc" } },
+          folders: { where: { parentFolderId: null, deletedAt: null }, orderBy: { name: "asc" } },
+          documents: { where: { folderId: null, deletedAt: null }, orderBy: { updatedAt: "desc" } },
         },
       },
     },

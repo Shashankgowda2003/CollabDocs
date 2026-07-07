@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { checkPermission } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 
-export async function createFolder(workspaceId: string, _parentFolderId: string | null, formData: FormData) {
+export async function createFolder(workspaceId: string, parentFolderId: string | null, formData: FormData) {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
 
@@ -24,10 +24,13 @@ export async function createFolder(workspaceId: string, _parentFolderId: string 
     data: {
       name,
       workspaceId,
-      parentFolderId: null,
+      parentFolderId,
     },
   });
 
+  if (parentFolderId) {
+    revalidatePath(`/${workspaceId}/f/${parentFolderId}`);
+  }
   revalidatePath(`/${workspaceId}`);
 }
 

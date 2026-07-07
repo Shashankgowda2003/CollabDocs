@@ -23,7 +23,7 @@ export default async function WorkspacePage({ params }: Props) {
   const { workspace } = membership;
   const canEdit = hasMinRole(membership.role as Role, "Editor");
 
-  const recentDocs = await db.document.findMany({ where: { workspaceId }, orderBy: { updatedAt: "desc" }, take: 5 });
+  const recentDocs = await db.document.findMany({ where: { workspaceId, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 5 });
 
   return (
     <div className="min-h-full bg-white dark:bg-zinc-950">

@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createDocument } from "@/server/actions/document";
-import { createFolder, renameFolder, deleteFolder } from "@/server/actions/folder";
-import { renameDocument } from "@/server/actions/document";
+import { createDocument, renameDocument, moveDocument } from "@/server/actions/document";
+import { createFolder, renameFolder } from "@/server/actions/folder";
 import { duplicateDocument, duplicateFolder } from "@/server/actions/duplicate";
 import { moveToTrash } from "@/server/actions/trash";
 import { motion, AnimatePresence } from "framer-motion";
-import { estimateReadingTimeShort } from "@/lib/utils";
 
 function formatDate(date: Date): string {
   const d = new Date(date);
@@ -28,6 +26,49 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
   const [editingDoc, setEditingDoc] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
   const [docTitle, setDocTitle] = useState("");
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [draggedDocId, setDraggedDocId] = useState<string | null>(null);
+  const [dragOverRoot, setDragOverRoot] = useState(false);
+
+  const handleDragStart = useCallback((e: React.DragEvent, docId: string) => {
+    e.dataTransfer.setData("text/plain", docId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedDocId(docId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedDocId(null);
+    setDragOverFolderId(null);
+    setDragOverRoot(false);
+  }, []);
+
+  const handleFolderDrop = useCallback(async (e: React.DragEvent, folderId: string) => {
+    e.preventDefault();
+    const docId = e.dataTransfer.getData("text/plain");
+    if (!docId) return;
+    setDragOverFolderId(null);
+    try {
+      await moveDocument(docId, folderId);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to move document");
+    }
+    handleDragEnd();
+  }, [router, handleDragEnd]);
+
+  const handleRootDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    const docId = e.dataTransfer.getData("text/plain");
+    if (!docId) return;
+    setDragOverRoot(false);
+    try {
+      await moveDocument(docId, null);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to move document");
+    }
+    handleDragEnd();
+  }, [router, handleDragEnd]);
 
   async function handleRenameFolder(id: string) {
     if (!folderName.trim()) return;
@@ -42,8 +83,24 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
     setEditingDoc(null); router.refresh();
   }
 
-  async function handleDeleteFolder(id: string) { if (!confirm("Move this folder to trash?")) return; await moveToTrash("Folder", id); router.refresh(); }
-  async function handleDeleteDoc(id: string) { if (!confirm("Move this document to trash?")) return; await moveToTrash("Document", id); router.refresh(); }
+  async function handleDeleteFolder(id: string) {
+    if (!confirm("Move this folder to trash?")) return;
+    try {
+      await moveToTrash("Folder", id);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete folder");
+    }
+  }
+  async function handleDeleteDoc(id: string) {
+    if (!confirm("Move this document to trash?")) return;
+    try {
+      await moveToTrash("Document", id);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete document");
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -66,7 +123,15 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
             <AnimatePresence mode="popLayout">
               {folders.map((folder) => (
                 <motion.div key={folder.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                  className="group flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all">
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                  onDragEnter={(e) => { e.preventDefault(); setDragOverFolderId(folder.id); }}
+                  onDragLeave={() => setDragOverFolderId(null)}
+                  onDrop={(e) => { e.preventDefault(); handleFolderDrop(e, folder.id); }}
+                  className={`group flex items-center gap-3 rounded-xl border transition-all ${
+                    dragOverFolderId === folder.id
+                      ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-400/30"
+                      : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm"
+                  }`}>
                   {editingFolder === folder.id ? (
                     <div className="flex-1 flex items-center gap-2 p-3">
                       <svg className="h-5 w-5 text-zinc-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>
@@ -96,16 +161,30 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
         </section>
       )}
 
-      <section>
+      <section
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+        onDragEnter={(e) => { e.preventDefault(); setDragOverRoot(true); }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOverRoot(false); }}
+        onDrop={handleRootDrop}
+      >
           <h2 className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-3">Documents</h2>
         {documents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-12 text-center"><p className="text-sm text-zinc-500">No documents at workspace root. Create one above.</p></div>
+          <div className={`rounded-2xl border border-dashed p-12 text-center transition-all ${
+            dragOverRoot
+              ? "border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+              : "border-zinc-300 dark:border-zinc-800"
+          }`}><p className="text-sm text-zinc-500">{dragOverRoot ? "Drop document here" : "No documents at workspace root. Create one above."}</p></div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             <AnimatePresence mode="popLayout">
               {documents.map((doc) => (
-                <motion.div key={doc.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                  className="group flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all">
+                <div key={doc.id}
+                  draggable={canEdit}
+                  onDragStart={(e) => handleDragStart(e, doc.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`group flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all ${
+                    draggedDocId === doc.id ? "opacity-50" : ""
+                  } ${canEdit ? "cursor-grab active:cursor-grabbing" : ""}`}>
                   {editingDoc === doc.id ? (
                     <div className="flex-1 flex items-center gap-2 p-3">
                       <svg className="h-5 w-5 text-zinc-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
@@ -130,7 +209,7 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
                       )}
                     </>
                   )}
-                </motion.div>
+                </div>
               ))}
             </AnimatePresence>
           </div>
