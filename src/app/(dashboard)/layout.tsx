@@ -6,6 +6,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { CommandPalette } from "@/components/command-palette";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { DocumentTour } from "@/components/document-tour";
+import { WorkspaceCallWrapper } from "@/components/workspace-call-wrapper";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -21,6 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <CommandPalette />
       <KeyboardShortcutsDialog />
       <DocumentTour />
+      <WorkspaceCallWrapper userName={session.user.name || "User"} />
     </div>
   );
 }

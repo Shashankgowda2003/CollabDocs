@@ -133,9 +133,9 @@ export class CallManager {
     }
   }
 
-  joinCall(): void {
-    if (this.state.status === "in-call") {
-      this.startCall();
+  async joinCall(): Promise<void> {
+    if (this.state.status !== "in-call") {
+      await this.startCall();
     }
   }
 
@@ -204,17 +204,6 @@ export class CallManager {
         screenEnabled: true,
       };
 
-      const videoTrack = screenStream.getVideoTracks()[0]!;
-      this.state.participants.forEach((p) => {
-        const sender = p.peerConnection
-          ?.getSenders()
-          .find((s) => s.track?.kind === "video");
-        if (sender && videoTrack) {
-          sender.replaceTrack(videoTrack).catch(() => {});
-        }
-      });
-
-      // Also add screen track to new offers by renegotiating
       this.state.participants.forEach((p, clientId) => {
         this.renegotiateWithScreen(clientId);
       });
@@ -228,23 +217,19 @@ export class CallManager {
   }
 
   stopScreenShare(): void {
-    this.state.screenStream?.getTracks().forEach((t) => t.stop());
+    if (this.state.screenStream === null && !this.state.screenEnabled) return;
 
-    const cameraTrack = this.state.localStream?.getVideoTracks()[0] ?? null;
-    this.state.participants.forEach((p) => {
-      const sender = p.peerConnection
-        ?.getSenders()
-        .find((s) => s.track?.kind === "video");
-      if (sender && cameraTrack) {
-        sender.replaceTrack(cameraTrack).catch(() => {});
-      }
-    });
+    this.state.screenStream?.getTracks().forEach((t) => t.stop());
 
     this.state = {
       ...this.state,
       screenStream: null,
       screenEnabled: false,
     };
+
+    this.state.participants.forEach((p, clientId) => {
+      this.renegotiateWithScreen(clientId);
+    });
 
     this.broadcastMediaState();
     this.emit();
@@ -288,37 +273,21 @@ export class CallManager {
       });
     }
 
-    if (this.state.screenStream) {
-      this.state.screenStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.state.screenStream!);
-      });
-    }
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        this.sendSignal(remoteClientId, {
-          type: "ice-candidate",
-          target: remoteClientId,
-          candidate: JSON.stringify(e.candidate),
-        });
-      }
-    };
-
     pc.ontrack = (e) => {
       const participant = this.state.participants.get(remoteClientId);
       if (participant) {
-        const newParticipants = new Map(this.state.participants);
-        const existingStream = participant.stream;
-        if (!existingStream) {
-          const newStream = new MediaStream();
-          newStream.addTrack(e.track);
-          newParticipants.set(remoteClientId, {
-            ...participant,
-            stream: newStream,
+        const newStream = new MediaStream();
+        if (participant.stream) {
+          participant.stream.getTracks().forEach((t) => {
+            if (t.kind !== e.track.kind) newStream.addTrack(t);
           });
-        } else {
-          existingStream.addTrack(e.track);
         }
+        newStream.addTrack(e.track);
+        const newParticipants = new Map(this.state.participants);
+        newParticipants.set(remoteClientId, {
+          ...participant,
+          stream: newStream,
+        });
         this.state = { ...this.state, participants: newParticipants };
         this.emit();
       }
@@ -350,6 +319,8 @@ export class CallManager {
     newParticipants.set(remoteClientId, participant);
     this.state = { ...this.state, participants: newParticipants };
 
+    this.emit();
+
     if (isInitiator) {
       this.createOffer(remoteClientId, pc);
     }
@@ -364,14 +335,46 @@ export class CallManager {
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      this.sendSignal(remoteClientId, {
-        type: "offer",
-        target: remoteClientId,
-        sdp: JSON.stringify(offer),
-      });
+      await this.waitForIceGathering(pc);
+      const completeOffer = pc.localDescription;
+      if (completeOffer) {
+        this.sendSignal(remoteClientId, {
+          type: "offer",
+          target: remoteClientId,
+          sdp: JSON.stringify(completeOffer),
+        });
+      }
     } catch (err) {
       console.error("Failed to create offer:", err);
     }
+  }
+
+  private waitForIceGathering(
+    pc: RTCPeerConnection,
+    timeoutMs = 5000
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      if (pc.iceGatheringState === "complete") {
+        resolve();
+        return;
+      }
+
+      const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+        pc.removeEventListener("icegatheringstatechange", checkState);
+        console.warn("ICE gathering timed out, sending SDP with gathered candidates");
+        resolve();
+      }, timeoutMs);
+
+      const checkState = () => {
+        if (pc.iceGatheringState === "complete") {
+          clearTimeout(timer);
+          pc.removeEventListener("icegatheringstatechange", checkState);
+          resolve();
+        }
+      };
+
+      pc.addEventListener("icegatheringstatechange", checkState);
+    });
   }
 
   private sendSignal(target: number, signal: CallSignal): void {
@@ -396,15 +399,22 @@ export class CallManager {
         if (user.signal) {
           const sig = user.signal;
           if (sig.target === this.myClientId) {
-            const signalKey = `${clientId}:${sig.type}`;
+            const signalPayload = sig.sdp ?? sig.candidate ?? "";
+            const signalKey = `${clientId}:${sig.type}:${signalPayload}`;
             if (!this.seenSignals.has(signalKey)) {
               this.seenSignals.add(signalKey);
+              console.log(`[CallManager] Received ${sig.type} from ${clientId}`);
               this.handleSignal(clientId, {
                 type: sig.type as CallSignal["type"],
                 target: sig.target,
                 sdp: sig.sdp,
                 candidate: sig.candidate,
+              }).catch((err) => {
+                console.error("Signal handling failed:", err);
+                this.seenSignals.delete(signalKey);
               });
+            } else {
+              console.log(`[CallManager] Ignored duplicate ${sig.type} from ${clientId}`);
             }
           }
         }
@@ -427,6 +437,7 @@ export class CallManager {
               screenEnabled: user.mediaState?.screen ?? p.screenEnabled,
             });
             this.state = { ...this.state, participants: newParticipants };
+            this.emit();
           }
         }
       });
@@ -446,32 +457,85 @@ export class CallManager {
     }
 
     if (signal.type === "offer") {
-      // Someone new joined — create peer connection and respond with answer
       if (!signal.sdp) return;
-      const pc = this.createPeerConnection(fromClientId, false);
+      const existingParticipant = this.state.participants.get(fromClientId);
+      const isRenegotiation =
+        existingParticipant?.peerConnection != null &&
+        existingParticipant.peerConnection.remoteDescription != null;
+      const pc = isRenegotiation
+        ? existingParticipant!.peerConnection!
+        : this.createPeerConnection(fromClientId, false);
 
       try {
         const offerDesc = JSON.parse(signal.sdp) as RTCSessionDescriptionInit;
         await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        this.sendSignal(fromClientId, {
-          type: "answer",
-          target: fromClientId,
-          sdp: JSON.stringify(answer),
-        });
+
+        if (!isRenegotiation) {
+          const participant = this.state.participants.get(fromClientId);
+          if (participant) {
+            setTimeout(() => {
+              const receivers = pc.getReceivers();
+              const newStream = new MediaStream();
+              for (const receiver of receivers) {
+                if (receiver.track) newStream.addTrack(receiver.track);
+              }
+              if (newStream.getTracks().length > 0) {
+                const newParticipants = new Map(this.state.participants);
+                newParticipants.set(fromClientId, { ...participant, stream: newStream });
+                this.state = { ...this.state, participants: newParticipants };
+                this.emit();
+              }
+            }, 100);
+          }
+        }
+
+        await this.waitForIceGathering(pc);
+        const completeAnswer = pc.localDescription;
+        if (completeAnswer) {
+          this.sendSignal(fromClientId, {
+            type: "answer",
+            target: fromClientId,
+            sdp: JSON.stringify(completeAnswer),
+          });
+        }
       } catch (err) {
         console.error("Failed to handle offer:", err);
       }
     } else if (signal.type === "answer") {
       if (!signal.sdp) return;
-      const pc =
-        this.state.participants.get(fromClientId)?.peerConnection ??
-        this.createPeerConnection(fromClientId, false);
+      const existingParticipant = this.state.participants.get(fromClientId);
+      const isRenegotiation =
+        existingParticipant?.peerConnection != null &&
+        existingParticipant.peerConnection.remoteDescription != null;
+      const pc = isRenegotiation
+        ? existingParticipant!.peerConnection!
+        : (this.state.participants.get(fromClientId)?.peerConnection ??
+          this.createPeerConnection(fromClientId, false));
 
       try {
         const answerDesc = JSON.parse(signal.sdp) as RTCSessionDescriptionInit;
         await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+
+        if (!isRenegotiation) {
+          const participant = this.state.participants.get(fromClientId);
+          if (participant) {
+            setTimeout(() => {
+              const receivers = pc.getReceivers();
+              const newStream = new MediaStream();
+              for (const receiver of receivers) {
+                if (receiver.track) newStream.addTrack(receiver.track);
+              }
+              if (newStream.getTracks().length > 0) {
+                const newParticipants = new Map(this.state.participants);
+                newParticipants.set(fromClientId, { ...participant, stream: newStream });
+                this.state = { ...this.state, participants: newParticipants };
+                this.emit();
+              }
+            }, 100);
+          }
+        }
       } catch (err) {
         console.error("Failed to handle answer:", err);
       }
@@ -503,27 +567,35 @@ export class CallManager {
 
   private async renegotiateWithScreen(clientId: number): Promise<void> {
     const pc = this.state.participants.get(clientId)?.peerConnection;
-    if (!pc || !this.state.screenStream) return;
+    if (!pc) return;
 
-    const videoTrack = this.state.screenStream.getVideoTracks()[0];
+    const screenTrack = this.state.screenStream?.getVideoTracks()[0];
+    const cameraTrack = this.state.localStream?.getVideoTracks()[0];
+    const videoTrack = screenTrack ?? cameraTrack;
     if (!videoTrack) return;
 
     const sender = pc.getSenders().find((s) => s.track?.kind === "video");
     if (sender) {
-      sender.replaceTrack(videoTrack).catch(() => {});
-    } else {
-      pc.addTrack(videoTrack, this.state.screenStream);
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+      pc.removeTrack(sender);
+    }
+    pc.addTrack(videoTrack, this.state.screenStream ?? this.state.localStream!);
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await this.waitForIceGathering(pc);
+      const completeOffer = pc.localDescription;
+      if (completeOffer) {
         this.sendSignal(clientId, {
           type: "offer",
           target: clientId,
-          sdp: JSON.stringify(offer),
+          sdp: JSON.stringify(completeOffer),
         });
-      } catch (err) {
-        console.error("Failed to renegotiate:", err);
       }
+    } catch (err) {
+      console.error("Failed to renegotiate:", err);
     }
   }
 

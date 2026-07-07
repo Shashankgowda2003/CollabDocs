@@ -49,6 +49,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   const [uploading, setUploading] = useState(false);
   const [callStatus, setCallStatus] = useState<"idle" | "in-call">("idle");
   const [hasActiveCallers, setHasActiveCallers] = useState(false);
+  const [callerNames, setCallerNames] = useState<string[]>([]);
   const callManagerRef = useRef<CallManager | null>(null);
   const userColorRef = useRef<string>("#8b5cf6");
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -85,18 +86,19 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   const readFromYjs = useCallback((): Block[] => {
     const yBlocks = yBlocksRef.current;
     if (!yBlocks) return [];
-    const result: Block[] = [];
+    const seen = new Map<string, Block>();
     yBlocks.forEach((yb) => {
-      result.push({
-        id: yb.get("id") || "",
+      const id = yb.get("id") || "";
+      if (seen.has(id)) return;
+      seen.set(id, {
+        id,
         type: yb.get("type") || "paragraph",
         content: yb.get("content") || "",
         parentId: yb.get("parentId") || null,
         position: Number(yb.get("position")) || 0,
       });
     });
-    result.sort((a, b) => a.position - b.position);
-    return result;
+    return Array.from(seen.values()).sort((a, b) => a.position - b.position);
   }, []);
 
   useEffect(() => {
@@ -111,9 +113,10 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
     const yBlocks = ydoc.getArray<Y.Map<string>>("blocks_v2");
     yBlocksRef.current = yBlocks;
 
-    if (initialBlocks.length > 0) {
+    if (yBlocks.length > 0) {
+      setBlocks(readFromYjs());
+    } else if (initialBlocks.length > 0) {
       ydoc.transact(() => {
-        yBlocks.delete(0, yBlocks.length);
         initialBlocks.forEach((b) => {
           const yb = new Y.Map<string>();
           yb.set("id", b.id);
@@ -125,20 +128,24 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
         });
       });
       setBlocks(initialBlocks);
-    } else if (yBlocks.length > 0) {
-      setBlocks(readFromYjs());
     }
 
     // Observe remote changes (from other clients)
+    let rafId: number | null = null;
     const observer = () => {
-      const fresh = readFromYjs();
-      setBlocks(fresh);
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const fresh = readFromYjs();
+        setBlocks(fresh);
+      });
     };
     yBlocks.observe(observer);
 
     awareness.on("change", () => setConnectedUsers(getConnectedUsers(awareness)));
 
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       yBlocks.unobserve(observer);
       unregisterYDoc(documentId);
@@ -172,14 +179,17 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
     if (!awareness) return;
 
     const checkCallers = () => {
-      let found = false;
+      const names: string[] = [];
       awareness.getStates().forEach((state, clientId) => {
         if (clientId !== awareness.clientID) {
           const user = state as AwarenessUser;
-          if (user?.callStatus === "in-call") found = true;
+          if (user?.callStatus === "in-call") {
+            names.push(user.name || "Someone");
+          }
         }
       });
-      setHasActiveCallers(found);
+      setHasActiveCallers(names.length > 0);
+      setCallerNames(names);
     };
 
     checkCallers();
@@ -389,6 +399,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
             <CallButton
               callActive={callStatus === "in-call"}
               hasActiveCallers={hasActiveCallers}
+              callerNames={callerNames}
               onStartCall={() => callManagerRef.current?.startCall()}
               onStartAudioOnly={() => callManagerRef.current?.startAudioOnly()}
               onJoinCall={() => callManagerRef.current?.joinCall()}
@@ -408,7 +419,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
           <AnimatePresence mode="popLayout">
             <div className="space-y-1.5" onClick={() => setActiveBlock(null)}>
               {blocks.map((block) => (
-                <motion.div key={block.id} layout initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                <motion.div key={`${block.id}-${block.position}`} layout initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
                   className={`group relative ${activeBlock === block.id ? "min-h-[2.5rem]" : ""}`}
                   onClick={(e) => { e.stopPropagation(); setActiveBlock(block.id); }}>
                     <BlockHandle block={block} hasAbove={blocks.indexOf(block) > 0}

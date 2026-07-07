@@ -3,11 +3,24 @@ import { cachedGetUserWorkspaces } from "@/lib/permissions";
 import { createWorkspace } from "@/server/actions/workspace";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { db } from "@/lib/db";
+import { AcceptInviteButton } from "./accept-invite-button";
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const memberships = await cachedGetUserWorkspaces(session.user.id);
+
+  const pendingInvites = await db.pendingInvitation.findMany({
+    where: { email: session.user.email!, used: false },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const workspaceIds = pendingInvites.map((inv) => inv.workspaceId);
+  const workspaces = workspaceIds.length > 0
+    ? await db.workspace.findMany({ where: { id: { in: workspaceIds } }, select: { id: true, name: true } })
+    : [];
+  const workspaceMap = new Map(workspaces.map((w) => [w.id, w]));
 
   return (
     <div className="min-h-full bg-white dark:bg-zinc-950">
@@ -28,7 +41,7 @@ export default async function DashboardPage() {
           </form>
         </div>
 
-        {memberships.length === 0 ? (
+        {memberships.length === 0 && pendingInvites.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-16 text-center">
             <div className="h-14 w-14 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-4">
               <svg className="h-7 w-7 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -45,12 +58,40 @@ export default async function DashboardPage() {
                   {m.workspace.name[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-zinc-900 dark:text-white text-sm truncate">{m.workspace.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm truncate">{m.workspace.name}</h3>
+                    {new Date(m.joinedAt).getTime() > Date.now() - 60 * 1000 && (
+                      <span className="text-[10px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded-full">New</span>
+                    )}
+                  </div>
                   <p className="text-xs text-zinc-500 mt-0.5">{m.workspace.folders.length} folders &middot; {m.workspace.documents.length} docs</p>
                 </div>
                 <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-lg">{m.role}</span>
               </Link>
             ))}
+          </div>
+        )}
+
+        {pendingInvites.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">Pending Invitations</h2>
+            <div className="space-y-2">
+              {pendingInvites.map((inv) => {
+                const ws = workspaceMap.get(inv.workspaceId);
+                if (!ws) return null;
+                return (
+              <div key={inv.id} className="flex items-center gap-4 rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/5 p-4">
+                <div className="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-600 dark:text-amber-400">
+                  {ws.name[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{ws.name}</p>
+                  <p className="text-xs text-zinc-500">Invited as {inv.role}</p>
+                </div>
+                <AcceptInviteButton invitationId={inv.id} workspaceId={ws.id} />
+              </div>
+            );})}
+            </div>
           </div>
         )}
       </div>

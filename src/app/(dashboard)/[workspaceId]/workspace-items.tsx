@@ -11,6 +11,12 @@ import { moveToTrash } from "@/server/actions/trash";
 import { motion, AnimatePresence } from "framer-motion";
 import { estimateReadingTimeShort } from "@/lib/utils";
 
+function formatDate(date: Date): string {
+  const d = new Date(date);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 interface Folder { id: string; name: string; }
 interface Doc { id: string; title: string; updatedAt: Date; }
 
@@ -113,7 +119,7 @@ export function WorkspaceItems({ workspaceId, folders, documents, canEdit }: Pro
                         <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 dark:from-blue-500/10 dark:to-purple-500/10 flex items-center justify-center text-sm shrink-0">
                           <DocumentIcon docId={doc.id} />
                         </div>
-                        <div className="min-w-0">                        <p className="font-medium text-zinc-900 dark:text-white text-sm truncate">{doc.title}</p><p className="text-xs text-zinc-500 mt-0.5">{new Date(doc.updatedAt).toLocaleDateString()}</p></div>
+                        <div className="min-w-0">                        <p className="font-medium text-zinc-900 dark:text-white text-sm truncate">{doc.title}</p><p className="text-xs text-zinc-500 mt-0.5">{formatDate(doc.updatedAt)}</p></div>
                       </Link>
                       {canEdit && (
                         <div className="flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
