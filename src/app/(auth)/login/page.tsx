@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -14,6 +14,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  const passwordError = useMemo(() => {
+    if (!passwordTouched) return "";
+    if (password.length === 0) return "Password is required";
+    return "";
+  }, [password, passwordTouched]);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -24,6 +31,18 @@ export default function LoginPage() {
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+
+    if (!password) {
+      setPasswordTouched(true);
+      setError("Password is required");
+      return;
+    }
+
     setLoading(true);
 
     const result = await signIn("credentials", {
@@ -98,6 +117,8 @@ export default function LoginPage() {
                 onChange={setPassword}
                 required
                 placeholder="••••••••"
+                error={passwordError}
+                onBlur={() => setPasswordTouched(true)}
               />
             </div>
 

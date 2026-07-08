@@ -44,6 +44,51 @@ function RegisterPageInner() {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [inviteData, setInviteData] = useState<{ role: string; documentTitle: string } | null>(null);
+  const [touched, setTouched] = useState({ password: false, confirm: false });
+
+  const passwordChecks = useMemo(() => ({
+    minLength: password.length >= 8,
+    hasUpper: /[A-Z]/.test(password),
+    hasLower: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  }), [password]);
+
+  const passwordStrength = useMemo(() => {
+    const checks = Object.values(passwordChecks);
+    return checks.filter(Boolean).length;
+  }, [passwordChecks]);
+
+  const passwordStrengthLabel = useMemo(() => {
+    if (password.length === 0) return "";
+    if (passwordStrength <= 2) return "Weak";
+    if (passwordStrength <= 3) return "Fair";
+    if (passwordStrength <= 4) return "Good";
+    return "Strong";
+  }, [passwordStrength]);
+
+  const passwordStrengthColor = useMemo(() => {
+    if (password.length === 0) return "bg-zinc-700";
+    if (passwordStrength <= 2) return "bg-red-500";
+    if (passwordStrength <= 3) return "bg-amber-500";
+    if (passwordStrength <= 4) return "bg-blue-500";
+    return "bg-green-500";
+  }, [passwordStrength]);
+
+  const passwordError = useMemo(() => {
+    if (!touched.password && password.length === 0) return "";
+    if (password.length === 0) return "";
+    if (password.length < 8) return "Password must be at least 8 characters";
+    if (passwordStrength < 4) return "Password is too weak";
+    return "";
+  }, [password, touched.password, passwordStrength]);
+
+  const confirmError = useMemo(() => {
+    if (!touched.confirm && confirmPassword.length === 0) return "";
+    if (confirmPassword.length === 0) return "";
+    if (password !== confirmPassword) return "Passwords do not match";
+    return "";
+  }, [password, confirmPassword, touched.confirm]);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -67,6 +112,18 @@ function RegisterPageInner() {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    setTouched({ password: true, confirm: true });
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (passwordStrength < 4) {
+      setError("Please meet all password requirements");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -180,11 +237,49 @@ function RegisterPageInner() {
               <PasswordInput
                 id="password"
                 value={password}
-                onChange={setPassword}
+                onChange={(v) => { setPassword(v); if (!touched.password) setTouched((t) => ({ ...t, password: true })); }}
                 required
                 minLength={8}
                 placeholder="Min. 8 characters"
+                error={passwordError}
+                onBlur={() => setTouched((t) => ({ ...t, password: true }))}
               />
+              {password.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div
+                        key={level}
+                        className={`h-1 flex-1 rounded-full transition-all duration-300 ${level <= passwordStrength ? passwordStrengthColor : "bg-zinc-700"}`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`text-[11px] font-medium ${passwordStrengthColor.replace("bg-", "text-")}`}>
+                    {passwordStrengthLabel}
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {[
+                      { key: "minLength" as const, label: "8+ characters" },
+                      { key: "hasUpper" as const, label: "Uppercase letter" },
+                      { key: "hasLower" as const, label: "Lowercase letter" },
+                      { key: "hasNumber" as const, label: "Number" },
+                      { key: "hasSpecial" as const, label: "Special character" },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex items-center gap-1">
+                        <svg
+                          className={`h-3 w-3 shrink-0 transition-colors ${passwordChecks[key] ? "text-green-400" : "text-zinc-600"}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span className={`text-[10px] transition-colors ${passwordChecks[key] ? "text-green-400" : "text-zinc-500"}`}>
+                          {label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -194,10 +289,12 @@ function RegisterPageInner() {
               <PasswordInput
                 id="confirmPassword"
                 value={confirmPassword}
-                onChange={setConfirmPassword}
+                onChange={(v) => { setConfirmPassword(v); if (!touched.confirm) setTouched((t) => ({ ...t, confirm: true })); }}
                 required
                 minLength={8}
                 placeholder="Repeat your password"
+                error={confirmError}
+                onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
               />
             </div>
 
