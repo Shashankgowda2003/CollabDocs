@@ -5,6 +5,31 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+export async function renameWorkspace(workspaceId: string, newName: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  if (!newName?.trim()) throw new Error("Name is required");
+
+  const member = await db.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: session.user.id } },
+  });
+
+  if (!member || !["Owner", "Admin"].includes(member.role)) {
+    throw new Error("Only owners and admins can rename workspaces");
+  }
+
+  await db.workspace.update({
+    where: { id: workspaceId },
+    data: { name: newName.trim() },
+  });
+
+  revalidatePath(`/dashboard`);
+  revalidatePath(`/${workspaceId}`);
+  revalidatePath(`/${workspaceId}/settings`);
+  return { success: true };
+}
+
 export async function createWorkspace(formData: FormData) {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");

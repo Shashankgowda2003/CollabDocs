@@ -19,6 +19,7 @@ const VISUAL = [
   { id: "whiteboard", label: "Whiteboard", icon: "\u270E" },
   { id: "progress", label: "Progress", icon: "\u25D0" },
   { id: "button", label: "Button", icon: "\u25B6" },
+  { id: "chart", label: "Chart", icon: "\u25E0" },
   { id: "toc", label: "TOC", icon: "\u2261" },
   { id: "form", label: "Form", icon: "\u25A1" },
   { id: "breadcrumb", label: "Breadcrumb", icon: "\u203A" },

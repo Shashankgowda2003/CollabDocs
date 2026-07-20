@@ -36,6 +36,8 @@ export default async function WorkspacePage({ params }: Props) {
               <p className="text-sm text-zinc-500">{membership.role}</p>
               <Link href={`/${workspaceId}/members`} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors">Members</Link>
               <span className="text-zinc-600 dark:text-zinc-700">&middot;</span>
+              <Link href={`/${workspaceId}/settings`} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors">Settings</Link>
+              <span className="text-zinc-600 dark:text-zinc-700">&middot;</span>
               <Link href={`/${workspaceId}/trash`} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors">Trash</Link>
             </div>
             <WorkspaceActions workspaceId={workspaceId} />

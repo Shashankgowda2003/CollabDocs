@@ -15,6 +15,7 @@ import { BreadcrumbBlock } from "./blocks/breadcrumb-block";
 import { ButtonBlock } from "./blocks/button-block";
 import { WhiteboardBlock } from "./blocks/whiteboard-block";
 import { FormBlock } from "./blocks/form-block";
+import { ChartBlock } from "./blocks/chart-block";
 import { AutoSaveIndicator } from "./auto-save-indicator";
 import { WordCount } from "./word-count";
 import { FileDropZone } from "./file-drop-zone";
@@ -749,6 +750,8 @@ function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
     }
     case "database":
       return <DatabaseBlock content={block.content} onChange={onChange} />;
+    case "chart":
+      return <ChartBlock content={block.content} blockId={block.id} allBlocks={allBlocks} onChange={onChange} />;
     case "diagram":
       return <DiagramBlock content={block.content} onChange={onChange} onKeyDown={onKeyDown} />;
     case "toc":

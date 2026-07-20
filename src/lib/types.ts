@@ -16,7 +16,8 @@ export type BlockType =
   | "callout"
   | "embed"
   | "ai"
-  | "database";
+  | "database"
+  | "chart";
 
 export type NotificationType =
   | "mention"
