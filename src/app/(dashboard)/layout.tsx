@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-950">
-      <div className="hidden lg:block"><DashboardSidebar /></div>
+      <div className="hidden lg:block"><DashboardSidebar userName={session.user.name || "User"} userEmail={session.user.email || ""} userImage={session.user.image || undefined} /></div>
       <MobileSidebar />
       <main className="flex-1 overflow-auto bg-white dark:bg-zinc-950">
         <ErrorBoundary>{children}</ErrorBoundary>

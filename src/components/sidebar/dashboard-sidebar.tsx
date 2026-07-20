@@ -8,16 +8,43 @@ import { SearchBar } from "@/components/search/search-bar";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { FavoritesList } from "@/components/sidebar/favorites-list";
 import { useTheme } from "@/lib/theme-context";
+import { updateProfile } from "@/server/actions/profile";
 
-export function DashboardSidebar() {
+interface Props {
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+}
+
+export function DashboardSidebar({ userName = "User", userEmail = "", userImage }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const [showSignOut, setShowSignOut] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [editName, setEditName] = useState(userName);
+  const [saving, setSaving] = useState(false);
 
   async function handleSignOut() {
     await signOut({ redirect: false });
     router.push("/login");
+  }
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editName.trim() || editName === userName) return;
+    setSaving(true);
+    const fd = new FormData();
+    fd.append("name", editName);
+    try {
+      await updateProfile(fd);
+      setShowProfile(false);
+      router.refresh();
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -55,6 +82,26 @@ export function DashboardSidebar() {
 
       <FavoritesList workspaceId={pathname.split("/")[1] || ""} />
 
+      <div className="p-3 border-t border-zinc-200 dark:border-zinc-800">
+        <button
+          onClick={() => setShowProfile(true)}
+          className="flex items-center gap-2.5 w-full rounded-xl p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+          title="Edit profile"
+        >
+          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-zinc-400 to-zinc-600 flex items-center justify-center text-white text-xs font-medium shrink-0 overflow-hidden">
+            {userImage ? (
+              <img src={userImage} alt={userName} className="h-full w-full object-cover" />
+            ) : (
+              userName.charAt(0).toUpperCase()
+            )}
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{userName}</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">{userEmail}</p>
+          </div>
+        </button>
+      </div>
+
       <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
         <NotificationBell />
         <button onClick={toggleTheme} className="rounded-xl p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all" title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
@@ -76,6 +123,62 @@ export function DashboardSidebar() {
               <button onClick={handleSignOut} className="rounded-xl bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-all">Sign Out</button>
               <button onClick={() => setShowSignOut(false)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowProfile(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+                {userImage ? (
+                  <img src={userImage} alt={userName} className="h-full w-full object-cover" />
+                ) : (
+                  userName.charAt(0).toUpperCase()
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Edit Profile</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Update your display name</p>
+              </div>
+            </div>
+            <form onSubmit={handleSaveProfile} className="space-y-3">
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Name</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-2.5 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30"
+                  placeholder="Your name"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Email</label>
+                <input
+                  value={userEmail}
+                  disabled
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/50 p-2.5 text-sm text-zinc-500 dark:text-zinc-500 cursor-not-allowed"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={saving || !editName.trim() || editName === userName}
+                  className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-xs font-semibold text-white hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 transition-all"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowProfile(false); setEditName(userName); }}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
