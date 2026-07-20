@@ -18,6 +18,7 @@ import { FormBlock } from "./blocks/form-block";
 import { AutoSaveIndicator } from "./auto-save-indicator";
 import { WordCount } from "./word-count";
 import { FileDropZone } from "./file-drop-zone";
+import { RichTextContent } from "./rich-text-content";
 import { CollaborationCursors } from "@/components/collaboration/cursors";
 import { ConnectedAvatars } from "@/components/collaboration/avatars";
 import { CallButton } from "@/components/collaboration/call-button";
@@ -233,18 +234,19 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
     }
   }, [activeBlock]);
 
-  const handleContentChange = useCallback((blockId: string, value: string) => {
+  const handleContentChange = useCallback((blockId: string, html: string, plainText?: string) => {
+    const text = plainText ?? html;
     if (editorMode === "suggesting") {
       setBlocks((prev) => {
         const block = prev.find((b) => b.id === blockId);
-        if (block && block.content !== value) {
-          const suggestionType = !block.content ? "add" : value ? "change" : "remove";
+        if (block && block.content !== html) {
+          const suggestionType = !block.content ? "add" : html ? "change" : "remove";
           createSuggestion(
             documentId,
             blockId,
             suggestionType,
             block.content,
-            value
+            html
           ).catch(() => {});
         }
         return prev;
@@ -253,26 +255,15 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
     }
 
     setBlocksAndSync((prev) =>
-      prev.map((b) => (b.id === blockId ? { ...b, content: value } : b))
+      prev.map((b) => (b.id === blockId ? { ...b, content: html } : b))
     );
 
-    if (value === "/") setSlashBlock(blockId);
+    const isSlash = text === "/" || text.startsWith("/");
+    if (isSlash && text.length <= 2) setSlashBlock(blockId);
     else if (slashBlock === blockId) setSlashBlock(null);
 
-    // Markdown shortcuts
-    if (value.endsWith("### ")) {
-      setBlocksAndSync((prev) =>
-        prev.map((b) => (b.id === blockId ? { ...b, type: "heading", content: value.replace(/###\s*$/, "") } : b))
-      );
-    }
-    if (value.endsWith("> ")) {
-      setBlocksAndSync((prev) =>
-        prev.map((b) => (b.id === blockId ? { ...b, type: "quote", content: value.replace(/>\s*$/, "") } : b))
-      );
-    }
-
-    // Wiki-link autocomplete trigger: [[query
-    const openLink = value.match(/\[\[([^\]]*)$/);
+    // Wiki-link autocomplete trigger: [[query (check plain text)
+    const openLink = text.match(/\[\[([^\]]*)$/);
     if (openLink) {
       setLinkBlock(blockId);
       setLinkQuery(openLink[1] || "");
@@ -432,7 +423,7 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
                   <div className="relative">
                     <BlockContent block={block} isActive={activeBlock === block.id}
                       allBlocks={blocks}
-                      onChange={(c) => handleContentChange(block.id, c)}
+                      onChange={(html, text) => handleContentChange(block.id, html, text)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey && !["code", "table", "checklist", "database"].includes(block.type)) { e.preventDefault(); addBlock("paragraph", block.id); }
                         if (e.key === "Backspace" && block.content === "" && blocks.length > 1 && !["image", "embed"].includes(block.type)) { e.preventDefault(); deleteBlock(block.id); }
@@ -479,13 +470,11 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
 }
 
 function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
-  block: Block; isActive: boolean; onChange: (c: string) => void; onKeyDown: (e: React.KeyboardEvent) => void; allBlocks?: Block[];
+  block: Block; isActive: boolean; onChange: (html: string, plainText?: string) => void; onKeyDown: (e: React.KeyboardEvent) => void; allBlocks?: Block[];
 }) {
-  const cn = "w-full rounded-xl px-3 py-2 text-zinc-800 dark:text-zinc-200 outline-none transition-all focus:bg-zinc-50 dark:focus:bg-zinc-900/50 placeholder:text-zinc-400 dark:placeholder:text-zinc-600";
-
   switch (block.type) {
     case "heading":
-      return <input className={`${cn} text-2xl font-bold`} value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Heading 1" />;
+      return <RichTextContent content={block.content} placeholder="Heading 1" className="text-2xl font-bold text-zinc-800 dark:text-zinc-200" onChange={onChange} onKeyDown={onKeyDown} autoFocus={isActive && !block.content} />;
     case "code":
       return (
         <div className="rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden">
@@ -493,9 +482,9 @@ function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
           <textarea className="w-full bg-transparent outline-none resize-none p-4 text-sm font-mono text-green-400 placeholder:text-zinc-700" value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Write code..." rows={6} /></div>
       );
     case "quote":
-      return <div className="border-l-2 border-blue-500 pl-4"><input className={`${cn} italic text-zinc-500 dark:text-zinc-400`} value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Quote" /></div>;
+      return <div className="border-l-2 border-blue-500 pl-4"><RichTextContent content={block.content} placeholder="Quote" className="italic text-zinc-500 dark:text-zinc-400" onChange={onChange} onKeyDown={onKeyDown} autoFocus={isActive && !block.content} /></div>;
     case "callout":
-      return <div className="rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 p-4"><input className="w-full bg-transparent outline-none text-blue-700 dark:text-blue-300 text-sm placeholder:text-blue-400 dark:placeholder:text-blue-500/50" value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Callout" /></div>;
+      return <div className="rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 p-4"><RichTextContent content={block.content} placeholder="Callout" className="text-blue-700 dark:text-blue-300 text-sm" onChange={onChange} onKeyDown={onKeyDown} autoFocus={isActive && !block.content} /></div>;
     case "image": {
       let url = ""; let filename = "";
       try { const p = JSON.parse(block.content); url = p.url; filename = p.filename; } catch { url = block.content; }
@@ -776,7 +765,7 @@ function BlockContent({ block, isActive, onChange, onKeyDown, allBlocks }: {
       );
     }
     default:
-      return <input className={`${cn} text-sm leading-relaxed`} value={block.content} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder="Type '/' for commands..." />;
+      return <RichTextContent content={block.content} placeholder="Type '/' for commands..." className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-200" onChange={onChange} onKeyDown={onKeyDown} autoFocus={isActive && !block.content} />;
   }
 }
 
