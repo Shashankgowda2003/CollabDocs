@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getVersionHistory, restoreSnapshot } from "@/server/actions/version";
 import { VersionDiffPanel } from "./version-diff-panel";
@@ -15,9 +16,10 @@ export function VersionPanel({ documentId, onClose }: Props) {
   const [ops, setOps] = useState<Op[]>([]); const [snapshots, setSnapshots] = useState<Snap[]>([]); const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
+  const router = useRouter();
 
   useEffect(() => { getVersionHistory(documentId).then((d) => { setOps(d.operations); setSnapshots(d.snapshots); setLoading(false); }); }, [documentId]);
-  const handleRestore = useCallback(async (id: string) => { setRestoring(id); await restoreSnapshot(id, documentId); setRestoring(null); onClose(); }, [documentId, onClose]);
+  const handleRestore = useCallback(async (id: string) => { setRestoring(id); await restoreSnapshot(id, documentId); setRestoring(null); onClose(); router.refresh(); }, [documentId, onClose, router]);
 
   return (
     <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-y-0 right-0 z-50 w-80 border-l border-zinc-800 bg-zinc-950 shadow-2xl flex flex-col">

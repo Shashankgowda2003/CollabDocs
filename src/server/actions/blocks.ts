@@ -50,9 +50,13 @@ export async function saveBlocks(documentId: string, blocks: { id: string; type:
   const newBlockIds = blocks.filter((b) => !existingIds.has(b.id)).map((b) => b.id);
   const deletedIds = [...existingIds].filter((id) => !blocks.find((b) => b.id === id));
 
-  let operationType = "update_block";
-  if (newBlockIds.length > 0) operationType = "create_block";
-  if (deletedIds.length > 0) operationType = "delete_block";
+  let operationType: string | null = null;
+  const hasNewBlocks = newBlockIds.length > 0;
+  const hasDeletedBlocks = deletedIds.length > 0;
+
+  if (hasNewBlocks && hasDeletedBlocks) operationType = "update_block";
+  else if (hasNewBlocks) operationType = "create_block";
+  else if (hasDeletedBlocks) operationType = "delete_block";
 
   await db.$transaction(async (tx) => {
     if (deletedIds.length > 0) {
@@ -85,18 +89,20 @@ export async function saveBlocks(documentId: string, blocks: { id: string; type:
       }
     }
 
-    await tx.operation.create({
-      data: {
-        documentId,
-        userId: session.user.id,
-        type: operationType,
-        payload: JSON.stringify({
-          blockCount: blocks.length,
-          newBlocks: newBlockIds,
-          deletedBlocks: deletedIds,
-        }),
-      },
-    });
+    if (operationType) {
+      await tx.operation.create({
+        data: {
+          documentId,
+          userId: session.user.id,
+          type: operationType,
+          payload: JSON.stringify({
+            blockCount: blocks.length,
+            newBlocks: newBlockIds,
+            deletedBlocks: deletedIds,
+          }),
+        },
+      });
+    }
 
     const opCount = await tx.operation.count({ where: { documentId } });
     const lastSnapshot = await tx.snapshot.findFirst({

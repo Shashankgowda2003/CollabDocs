@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkPermission } from "@/lib/permissions";
+import { revalidatePath } from "next/cache";
 
 export async function getVersionHistory(documentId: string) {
   const session = await auth();
@@ -68,6 +69,9 @@ export async function restoreSnapshot(snapshotId: string, documentId: string) {
       payload: JSON.stringify({ snapshotId, restoredAt: new Date().toISOString() }),
     },
   });
+
+  const doc = await db.document.findUnique({ where: { id: documentId }, select: { workspaceId: true } });
+  if (doc) revalidatePath(`/${doc.workspaceId}/d/${documentId}`);
 
   return { success: true };
 }
