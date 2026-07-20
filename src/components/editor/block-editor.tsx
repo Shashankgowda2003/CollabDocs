@@ -59,6 +59,8 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   const yBlocksRef = useRef<Y.Array<Y.Map<string>> | null>(null);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const blocksRef = useRef<Block[]>(initialBlocks);
+  const suggestionTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const suggestionStateRef = useRef<Map<string, { originalContent: string; latestContent: string }>>(new Map());
   const observerSetupRef = useRef(false);
 
   // Sync blocks TO Yjs from React state
@@ -148,6 +150,9 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      suggestionTimersRef.current.forEach((timer) => clearTimeout(timer));
+      suggestionTimersRef.current.clear();
+      suggestionStateRef.current.clear();
       yBlocks.unobserve(observer);
       unregisterYDoc(documentId);
       provider.disconnect();
@@ -237,20 +242,37 @@ export function BlockEditor({ documentId, workspaceId, userName, initialBlocks =
   const handleContentChange = useCallback((blockId: string, html: string, plainText?: string) => {
     const text = plainText ?? html;
     if (editorMode === "suggesting") {
-      setBlocks((prev) => {
-        const block = prev.find((b) => b.id === blockId);
-        if (block && block.content !== html) {
-          const suggestionType = !block.content ? "add" : html ? "change" : "remove";
+      if (!suggestionStateRef.current.has(blockId)) {
+        const block = blocksRef.current.find((b) => b.id === blockId);
+        suggestionStateRef.current.set(blockId, {
+          originalContent: block?.content || "",
+          latestContent: html,
+        });
+      } else {
+        const state = suggestionStateRef.current.get(blockId)!;
+        state.latestContent = html;
+      }
+
+      // Debounce suggestions: only flush after user stops typing for 500ms
+      const existingTimer = suggestionTimersRef.current.get(blockId);
+      if (existingTimer) clearTimeout(existingTimer);
+
+      const timer = setTimeout(() => {
+        const state = suggestionStateRef.current.get(blockId);
+        if (state && state.latestContent !== state.originalContent) {
+          const suggestionType = !state.originalContent ? "add" : state.latestContent ? "change" : "remove";
           createSuggestion(
             documentId,
             blockId,
             suggestionType,
-            block.content,
-            html
+            state.originalContent,
+            state.latestContent
           ).catch(() => {});
         }
-        return prev;
-      });
+        suggestionTimersRef.current.delete(blockId);
+      }, 500);
+
+      suggestionTimersRef.current.set(blockId, timer);
       return;
     }
 

@@ -4,8 +4,6 @@ import { useEffect, useRef } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
-import LinkExtension from "@tiptap/extension-link";
 import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -48,6 +46,7 @@ export function RichTextContent({
   const prevContentRef = useRef(content);
 
   const editor = useEditor({
+    immediatelyRender: true,
     extensions: [
       StarterKit.configure({
         heading: false,
@@ -59,13 +58,12 @@ export function RichTextContent({
         horizontalRule: false,
         hardBreak: false,
         gapcursor: false,
+        link: {
+          openOnClick: true,
+          HTMLAttributes: { class: "text-blue-500 dark:text-blue-400 underline cursor-pointer hover:text-blue-600 dark:hover:text-blue-300" },
+        },
       }),
       Placeholder.configure({ placeholder }),
-      Underline,
-      LinkExtension.configure({
-        openOnClick: true,
-        HTMLAttributes: { class: "text-blue-500 dark:text-blue-400 underline cursor-pointer hover:text-blue-600 dark:hover:text-blue-300" },
-      }),
       Highlight.configure({ multicolor: true }),
       TextStyle,
       Color,

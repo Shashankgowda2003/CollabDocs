@@ -229,7 +229,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-zinc-800 px-6 py-8 text-center">
         <p className="text-xs text-zinc-500">
-          CollabDocs — Built with Next.js, Yjs, Prisma, and Tailwind CSS
+          &copy; {new Date().getFullYear()} CollabDocs. All rights reserved.
         </p>
       </footer>
     </div>

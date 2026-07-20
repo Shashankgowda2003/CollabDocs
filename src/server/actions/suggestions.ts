@@ -26,18 +26,28 @@ export async function createSuggestion(
   const doc = await db.document.findUnique({ where: { id: documentId }, select: { workspaceId: true } });
   if (!doc) throw new Error("Document not found");
 
-  await db.suggestion.create({
-    data: {
-      documentId,
-      blockId,
-      userId: session.user.id,
-      type,
-      oldContent,
-      newContent,
-    },
+  // Upsert: if a pending suggestion already exists for this user+block, update it instead of creating a duplicate
+  const existing = await db.suggestion.findFirst({
+    where: { documentId, blockId, userId: session.user.id, status: "pending" },
+    orderBy: { createdAt: "desc" },
   });
 
+  let suggestionId: string;
+  if (existing) {
+    await db.suggestion.update({
+      where: { id: existing.id },
+      data: { newContent, type, oldContent },
+    });
+    suggestionId = existing.id;
+  } else {
+    const created = await db.suggestion.create({
+      data: { documentId, blockId, userId: session.user.id, type, oldContent, newContent },
+    });
+    suggestionId = created.id;
+  }
+
   revalidatePath(`/${doc.workspaceId}/d/${documentId}`);
+  return { id: suggestionId };
 }
 
 export async function getSuggestions(documentId: string) {
@@ -64,10 +74,23 @@ export async function resolveSuggestion(suggestionId: string, status: "accepted"
   await db.suggestion.update({ where: { id: suggestionId }, data: { status } });
 
   if (status === "accepted" && suggestion.blockId) {
-    await db.block.update({
-      where: { id: suggestion.blockId },
-      data: { content: suggestion.newContent },
-    });
+    const existingBlock = await db.block.findUnique({ where: { id: suggestion.blockId } });
+    if (existingBlock) {
+      await db.block.update({
+        where: { id: suggestion.blockId },
+        data: { content: suggestion.newContent },
+      });
+    } else {
+      await db.block.create({
+        data: {
+          id: suggestion.blockId,
+          documentId: suggestion.documentId,
+          type: "paragraph",
+          content: suggestion.newContent,
+          position: 0,
+        },
+      });
+    }
   }
 
   revalidatePath(`/${suggestion.document.workspaceId}/d/${suggestion.documentId}`);
