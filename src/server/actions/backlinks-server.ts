@@ -110,7 +110,7 @@ export async function getWorkspaceGraph(workspaceId: string) {
   const [docs, links] = await Promise.all([
     db.document.findMany({
       where: { workspaceId, deletedAt: null },
-      select: { id: true, title: true },
+      select: { id: true, title: true, folderId: true, updatedAt: true },
     }),
     db.documentLink.findMany({
       where: {
